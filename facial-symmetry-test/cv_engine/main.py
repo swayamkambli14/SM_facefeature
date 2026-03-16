@@ -32,7 +32,6 @@ security = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        # Try HS256 first (standard JWT secret)
         payload = jwt.decode(
             credentials.credentials,
             SUPABASE_JWT_SECRET,
@@ -43,7 +42,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         return payload
     except JWTError:
         try:
-            # Fallback: decode without verification for Supabase ES256
             payload = jwt.decode(
                 credentials.credentials,
                 SUPABASE_JWT_SECRET,
@@ -59,10 +57,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 def upload_image_to_storage(image_path: str, storage_path: str) -> str:
-    """Upload image to Supabase Storage.
-    Returns the storage path on success.
-    storage_path format: {user_id}/baseline.jpg or {user_id}/scans/{timestamp}.jpg
-    """
     with open(image_path, "rb") as img_file:
         supabase.storage.from_("face-images").upload(
             path=storage_path,
@@ -151,14 +145,9 @@ async def analyze(
                     fingerprint_str = f.read()
                 output["fingerprint_data"] = fingerprint_str
 
-                # Upload baseline image to Supabase Storage
-                # Path: face-images/{user_id}/baseline.jpg
-                # upsert=true overwrites previous baseline automatically
                 baseline_storage_path = f"{user_id}/baseline.jpg"
                 upload_image_to_storage(image_path, baseline_storage_path)
 
-                # Save fingerprint + image path to baselines table
-                # upsert on user_id so re-running baseline updates existing row
                 supabase.table("baselines").upsert(
                     {
                         "user_id": user_id,
@@ -174,12 +163,9 @@ async def analyze(
             import time
             timestamp = int(time.time())
 
-            # Upload scan image to Supabase Storage
-            # Path: face-images/{user_id}/scans/{timestamp}.jpg
             scan_storage_path = f"{user_id}/scans/{timestamp}.jpg"
             upload_image_to_storage(image_path, scan_storage_path)
 
-            # Save scan result + image path to scans table
             supabase.table("scans").insert(
                 {
                     "user_id": user_id,
@@ -197,8 +183,8 @@ async def analyze(
     except subprocess.TimeoutExpired:
         return JSONResponse(status_code=504, content={"error": "Analysis timed out after 60s"})
     except Exception as e:
+        print(f"FULL ERROR: {traceback.format_exc()}", flush=True)  # ← FIXED: now outside JSONResponse
         return JSONResponse(
-            print(f"FULL ERROR: {traceback.format_exc()}", flush=True)
             status_code=500,
             content={"error": str(e), "trace": traceback.format_exc()},
         )
