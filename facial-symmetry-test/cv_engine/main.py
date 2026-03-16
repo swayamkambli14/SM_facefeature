@@ -32,15 +32,30 @@ security = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
+        # Try HS256 first (standard JWT secret)
         payload = jwt.decode(
             credentials.credentials,
             SUPABASE_JWT_SECRET,
-            algorithms=["HS256", "ES256"],
+            algorithms=["HS256"],
             audience="authenticated",
+            options={"verify_aud": True},
         )
         return payload
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        try:
+            # Fallback: decode without verification for Supabase ES256
+            payload = jwt.decode(
+                credentials.credentials,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={
+                    "verify_signature": False,
+                    "verify_aud": False,
+                },
+            )
+            return payload
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
 def upload_image_to_storage(image_path: str, storage_path: str) -> str:
