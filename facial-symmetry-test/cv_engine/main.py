@@ -198,6 +198,7 @@ async def analyze(
         return JSONResponse(status_code=504, content={"error": "Analysis timed out after 60s"})
     except Exception as e:
         return JSONResponse(
+            print(f"FULL ERROR: {traceback.format_exc()}", flush=True)
             status_code=500,
             content={"error": str(e), "trace": traceback.format_exc()},
         )
